@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="top-pane">
+        <div class="logo-container">
+            <img src="https://via.placeholder.com/50" alt="Logo" class="logo"> <!-- Placeholder logo -->
+        </div>
+        <div class="dropdown-container">
+            <select id="envDropdown">
+                <option value="Production">Production</option>
+                <option value="Staging">Staging</option>
+                <option value="Development">Development</option>
+            </select>
+        </div>
+        <div class="version-info">
+            <span id="date"></span> | Version 1.0.0
+        </div>
+    </div>
+    <div class="content-wrapper">
+        <div class="left-pane">
+            <div class="section">
+                <div class="section-title">Support</div>
+                <ul id="menuList">
+                    <li><a href="#" class="button" title="This link provides support for issue 1">Support Link 1</a></li>
+                    <li><a href="#" class="button" title="This link provides support for issue 2">Support Link 2</a></li>
+                </ul>
+            </div>
+            <div class="section">
+                <div class="section-title">Operations</div>
+                <ul id="menuList">
+                    <li><a href="#" class="button" title="This link provides operations data for area 1">Operations Link 1</a></li>
+                    <li><a href="#" class="button" title="This link provides operations data for area 2">Operations Link 2</a></li>
+                </ul>
+            </div>
+            <div class="section">
+                <div class="section-title">Analytics</div>
+                <ul id="menuList">
+                    <li><a href="#" class="button" title="This link provides analytics for module 1">Analytics Link 1</a></li>
+                    <li><a href="#" class="button" title="This link provides analytics for module 2">Analytics Link 2</a></li>
+                </ul>
+            </div>
+            <button id="leftToggleButton" class="toggle-button">&#9664;</button>
+			<!-- Copyright Statement -->
+			<div class="copyright">
+				&copy; 2024 Your Company Name
+			</div>
+        </div>
+        <div class="right-pane">
+            <iframe src="" id="contentFrame"></iframe>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
