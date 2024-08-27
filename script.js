@@ -73,3 +73,8 @@ document.getElementById('leftToggleButton').addEventListener('click', function()
 
 // Date display
 document.getElementById('date').textContent = new Date().toLocaleDateString();
+
+// Ensure the correct environment is selected on initial load
+document.addEventListener('DOMContentLoaded', function () {
+    document.getElementById('envDropdown').dispatchEvent(new Event('change'));
+});
