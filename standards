@@ -1,0 +1,123 @@
+Here’s the improved version with rule numbers for each standard and a Code Review Checklist section. This version is professional, highly structured, and ideal for evaluations.
+
+Coding Standards Document for [[Project Name]]
+
+Document Information
+	•	Document Title: Coding Standards for [[Project Name]]
+	•	Authors: [[Your Name]], [[Team/Organization Name]]
+	•	Version: 1.1
+	•	Last Updated: [[Date]]
+	•	Confidentiality Level: Internal
+
+Preface
+
+This document provides coding standards and guidelines to ensure consistent, high-quality, and maintainable code for [[Project Name]]. It is designed to be a reference for all developers, testers, and reviewers, and includes a checklist for verifying compliance during code reviews.
+
+Feedback and suggestions for improvement are welcome as part of our commitment to continuous improvement.
+
+Version History
+
+Version	Date	Author	Description
+1.0	[[Date]]	[[Your Name]]	Initial release of coding standards.
+1.1	[[Date]]	[[Your Name]]	Added rule numbers and code review checklist.
+
+Table of Contents
+	1.	Introduction
+	2.	General Coding Standards
+	•	Code Formatting
+	•	Naming Conventions
+	•	Commenting Guidelines
+	•	File Structure and Organization
+	•	Code Documentation
+	•	Security Best Practices
+	3.	Language-Specific Standards
+	•	C++ Standards
+	•	C# (.NET) Standards
+	•	Java Standards
+	4.	Error Handling and Logging
+	5.	Testing and Quality Assurance
+	6.	Code Review Checklist
+	7.	References
+
+1. Introduction
+
+Scope
+
+This document defines coding standards for C++, C#, and Java in [[Project Name]]. These standards aim to ensure code quality, maintainability, and consistency across the project.
+
+Audience
+
+Developers, testers, reviewers, and stakeholders involved in the development lifecycle of [[Project Name]].
+
+2. General Coding Standards
+
+2.1 Code Formatting
+	•	Rule 2.1.1: Use 4 spaces for indentation; avoid tabs.
+	•	Rule 2.1.2: Limit line length to 120 characters.
+	•	Rule 2.1.3: Use consistent brace styles (K&R or Allman).
+
+2.2 Naming Conventions
+	•	Rule 2.2.1: Use camelCase for variables and methods (employeeName).
+	•	Rule 2.2.2: Use PascalCase for classes (UserProfile).
+	•	Rule 2.2.3: Use UPPER_SNAKE_CASE for constants (MAX_RETRIES).
+
+2.3 Commenting Guidelines
+	•	Rule 2.3.1: Document public methods with parameters, return types, and functionality.
+	•	Rule 2.3.2: Avoid commented-out code unless tagged with TODO or FIXME.
+
+2.4 File Structure and Organization
+	•	Rule 2.4.1: Organize files logically in folders (Models, Services, etc.).
+	•	Rule 2.4.2: Separate interface definitions from their implementations.
+
+2.5 Code Documentation
+	•	Rule 2.5.1: Use tools like Doxygen (C++), XML comments (C#), or Javadoc (Java).
+
+2.6 Security Best Practices
+	•	Rule 2.6.1: Validate all user inputs.
+	•	Rule 2.6.2: Avoid hardcoding sensitive information.
+
+3. Language-Specific Standards
+
+3.1 C++ Standards
+	•	Rule 3.1.1: Use smart pointers for memory management.
+	•	Rule 3.1.2: Avoid raw pointers unless absolutely necessary.
+
+3.2 C# Standards
+	•	Rule 3.2.1: Use dependency injection for managing dependencies.
+	•	Rule 3.2.2: Avoid exposing fields; use properties.
+
+3.3 Java Standards
+	•	Rule 3.3.1: Use @Override annotations for overridden methods.
+	•	Rule 3.3.2: Avoid static imports for readability.
+
+4. Error Handling and Logging
+	•	Rule 4.1: Log meaningful error messages, avoiding sensitive data.
+	•	Rule 4.2: Use structured error handling (e.g., exceptions).
+
+5. Testing and Quality Assurance
+	•	Rule 5.1: Maintain a minimum of 80% unit test coverage.
+	•	Rule 5.2: Use mocking frameworks for dependency testing.
+
+6. Code Review Checklist
+
+Rule Number	Rule Description	Compliant (Yes/No)	Comments
+2.1.1	Code uses 4 spaces for indentation.		
+2.1.2	Line lengths do not exceed 120 characters.		
+2.2.1	Variables and methods follow camelCase naming convention.		
+2.2.2	Classes follow PascalCase naming convention.		
+2.3.1	Public methods are documented with parameters and return types.		
+3.1.1	Smart pointers are used in C++ where applicable.		
+3.2.1	Dependency injection is used in C# where applicable.		
+4.1	Error messages are meaningful and avoid sensitive data.		
+5.1	Unit test coverage meets or exceeds 80%.		
+
+Instructions for Code Reviewers:
+	•	Mark Yes or No in the compliance column for each rule.
+	•	Provide detailed comments for any rule marked as No.
+
+7. References
+	1.	C++ Core Guidelines
+	2.	Microsoft C# Guidelines
+	3.	Java Code Conventions
+
+Would you like this document in MS Word format with professional styling and the checklist included?
