@@ -7,3 +7,21 @@ headers = {"Authorization": "Bearer YOUR_API_TOKEN"}
 response = requests.get(url, params=params, headers=headers).json()
 parent_key = response.get("fields", {}).get("parent", {}).get("key")
 print(parent_key)  # Outputs: PARENT-456
+
+
+
+import requests
+
+url = "https://your-jira-instance/rest/api/2/issue/ABC-1235"
+params = {"fields": "issuetype,parent"}
+headers = {"Authorization": "Bearer YOUR_API_TOKEN"}
+
+response = requests.get(url, params=params, headers=headers).json()
+issuetype = response.get("fields", {}).get("issuetype", {})
+is_subtask = issuetype.get("subtask", False)
+parent = response.get("fields", {}).get("parent")
+
+if is_subtask and parent:
+    print("This is a sub-Jira.")
+else:
+    print("This is not a sub-Jira.")
