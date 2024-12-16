@@ -25,3 +25,44 @@ if is_subtask and parent:
     print("This is a sub-Jira.")
 else:
     print("This is not a sub-Jira.")
+
+
+
+import subprocess
+import json
+
+# Replace with your Jira API details
+issue_key = "ABC-1235"
+jira_url = f"https://your-jira-instance/rest/api/2/issue/{issue_key}?fields=issuetype,parent"
+auth_token = "YOUR_API_TOKEN"
+
+# Construct the curl command
+curl_command = [
+    "curl",
+    "-s",  # Silent mode to suppress additional output
+    "-H", f"Authorization: Bearer {auth_token}",
+    jira_url,
+]
+
+# Execute the curl command
+try:
+    result = subprocess.run(curl_command, capture_output=True, text=True, check=True)
+    response = json.loads(result.stdout)
+
+    # Extract necessary fields
+    issuetype = response.get("fields", {}).get("issuetype", {})
+    is_subtask = issuetype.get("subtask", False)
+    parent = response.get("fields", {}).get("parent")
+
+    # Determine if the issue is a sub-task
+    if is_subtask and parent:
+        print("This is a sub-Jira.")
+    else:
+        print("This is not a sub-Jira.")
+
+except subprocess.CalledProcessError as e:
+    print(f"Error executing curl: {e}")
+    print(f"Output: {e.output}")
+except json.JSONDecodeError:
+    print("Failed to parse JSON response.")
+
