@@ -1,3 +1,7 @@
+
+
+
+
 import requests
 
 url = "https://your-jira-instance/rest/api/2/issue/ABC-1235"
@@ -65,4 +69,59 @@ except subprocess.CalledProcessError as e:
     print(f"Output: {e.output}")
 except json.JSONDecodeError:
     print("Failed to parse JSON response.")
+
+
+
+
+pipeline {
+    agent any
+    stages {
+        stage('Checkout') {
+            steps {
+                // Checkout your code from Git
+                checkout scm
+            }
+        }
+        stage('Validate Git State') {
+            steps {
+                script {
+                    // Fetch latest changes from the remote repository
+                    sh 'git fetch'
+
+                    // Check for uncommitted changes in the working directory
+                    def hasLocalChanges = sh(
+                        returnStatus: true, 
+                        script: 'git diff --quiet HEAD'
+                    ) != 0
+
+                    if (hasLocalChanges) {
+                        echo "There are uncommitted changes in the local repository."
+                        error("Local changes detected. Please commit or stash your changes.")
+                    }
+
+                    // Get the latest commit hash of the current branch (local)
+                    def localCommit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+
+                    // Get the latest commit hash of the current branch (remote)
+                    def remoteCommit = sh(returnStdout: true, script: 'git rev-parse @{u}').trim()
+
+                    // Compare the commit hashes
+                    if (localCommit == remoteCommit) {
+                        echo "Source is up-to-date with the latest version in Git."
+                    } else {
+                        echo "Source is NOT up-to-date with the latest version in Git."
+                        error("Source is out-of-date. Update required.")
+                    }
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                // Your build steps here
+                echo "Proceeding with the build..."
+            }
+        }
+    }
+}
+
 
