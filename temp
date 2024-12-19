@@ -1,7 +1,4 @@
 
-
-
-
 import requests
 
 url = "https://your-jira-instance/rest/api/2/issue/ABC-1235"
@@ -121,6 +118,46 @@ pipeline {
                 echo "Proceeding with the build..."
             }
         }
+    }
+}
+
+pipeline {
+    agent {
+        node {
+            customWorkspace "${env.BRANCH_WORKSPACE}"
+        }
+    }
+    environment {
+        BRANCH_WORKSPACE = "${getBranchWorkspace()}"
+    }
+    stages {
+        stage('Determine Workspace') {
+            steps {
+                script {
+                    echo "Branch type: ${env.GIT_BRANCH}"
+                    echo "Using workspace: ${env.BRANCH_WORKSPACE}"
+                }
+            }
+        }
+        stage('Build') {
+            steps {
+                echo "Building project in workspace: ${env.BRANCH_WORKSPACE}"
+                // Add build steps here
+            }
+        }
+    }
+}
+
+def getBranchWorkspace() {
+    def branch = env.GIT_BRANCH ?: 'default'
+    if (branch.startsWith('feature/')) {
+        return '/workspaces/feature'
+    } else if (branch.startsWith('release/')) {
+        return '/workspaces/release'
+    } else if (branch.startsWith('main') || branch.startsWith('master')) {
+        return '/workspaces/main'
+    } else {
+        return '/workspaces/default'
     }
 }
 
