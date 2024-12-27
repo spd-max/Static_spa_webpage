@@ -1,164 +1,89 @@
+Here is a simple yet comprehensive Configuration Management Plan (CMP) template for a software project. Let me know if you’d like me to pre-fill any details or customize it further.
 
-import requests
+Configuration Management Plan (CMP) Template
 
-url = "https://your-jira-instance/rest/api/2/issue/ABC-1235"
-params = {"fields": "parent"}
-headers = {"Authorization": "Bearer YOUR_API_TOKEN"}
+1. Introduction
 
-response = requests.get(url, params=params, headers=headers).json()
-parent_key = response.get("fields", {}).get("parent", {}).get("key")
-print(parent_key)  # Outputs: PARENT-456
+1.1 Purpose
+Describe the purpose of this document and its importance for the project.
 
+1.2 Scope
+Detail the project name, its objectives, and what the CMP covers (e.g., tools, processes, roles).
 
+1.3 Definitions and Acronyms
+Provide definitions of terms and acronyms used in the document.
 
-import requests
+2. Roles and Responsibilities
 
-url = "https://your-jira-instance/rest/api/2/issue/ABC-1235"
-params = {"fields": "issuetype,parent"}
-headers = {"Authorization": "Bearer YOUR_API_TOKEN"}
+Define the roles and responsibilities of all personnel involved in configuration management:
+	•	Configuration Manager:
+	•	Project Manager:
+	•	Developers/QA:
+	•	Release Manager:
 
-response = requests.get(url, params=params, headers=headers).json()
-issuetype = response.get("fields", {}).get("issuetype", {})
-is_subtask = issuetype.get("subtask", False)
-parent = response.get("fields", {}).get("parent")
+3. Configuration Identification
 
-if is_subtask and parent:
-    print("This is a sub-Jira.")
-else:
-    print("This is not a sub-Jira.")
+3.1 Items to be Managed
+List the artifacts that will be tracked (e.g., source code, documentation, test cases, build scripts).
 
+3.2 Naming Conventions
+Specify naming conventions for artifacts (e.g., feature_branch_[ticket_number]).
 
+3.3 Versioning Scheme
+Detail the versioning policy (e.g., semantic versioning, YYYY.MM.DD).
 
-import subprocess
-import json
+4. Configuration Control
 
-# Replace with your Jira API details
-issue_key = "ABC-1235"
-jira_url = f"https://your-jira-instance/rest/api/2/issue/{issue_key}?fields=issuetype,parent"
-auth_token = "YOUR_API_TOKEN"
+4.1 Change Control Process
+Outline the process for requesting, approving, and implementing changes.
 
-# Construct the curl command
-curl_command = [
-    "curl",
-    "-s",  # Silent mode to suppress additional output
-    "-H", f"Authorization: Bearer {auth_token}",
-    jira_url,
-]
+4.2 Change Control Board (CCB)
+List members of the CCB and their responsibilities.
 
-# Execute the curl command
-try:
-    result = subprocess.run(curl_command, capture_output=True, text=True, check=True)
-    response = json.loads(result.stdout)
+4.3 Tools Used
+Specify tools for change tracking (e.g., JIRA, Git, Jenkins).
 
-    # Extract necessary fields
-    issuetype = response.get("fields", {}).get("issuetype", {})
-    is_subtask = issuetype.get("subtask", False)
-    parent = response.get("fields", {}).get("parent")
+5. Configuration Status Accounting
 
-    # Determine if the issue is a sub-task
-    if is_subtask and parent:
-        print("This is a sub-Jira.")
-    else:
-        print("This is not a sub-Jira.")
+Describe how the status of configuration items will be recorded and tracked (e.g., automated reports, manual logs).
 
-except subprocess.CalledProcessError as e:
-    print(f"Error executing curl: {e}")
-    print(f"Output: {e.output}")
-except json.JSONDecodeError:
-    print("Failed to parse JSON response.")
+6. Audits and Reviews
 
+6.1 Configuration Audits
+Explain the process for ensuring compliance with CM standards (e.g., periodic audits).
 
+6.2 Baseline Reviews
+Detail reviews to confirm the correctness of baselines.
 
+7. Tools and Environment
 
-pipeline {
-    agent any
-    stages {
-        stage('Checkout') {
-            steps {
-                // Checkout your code from Git
-                checkout scm
-            }
-        }
-        stage('Validate Git State') {
-            steps {
-                script {
-                    // Fetch latest changes from the remote repository
-                    sh 'git fetch'
+7.1 Version Control System
+Specify tools (e.g., Git, SVN).
 
-                    // Check for uncommitted changes in the working directory
-                    def hasLocalChanges = sh(
-                        returnStatus: true, 
-                        script: 'git diff --quiet HEAD'
-                    ) != 0
+7.2 Build Tools
+List tools for building and deployment (e.g., Jenkins, Maven).
 
-                    if (hasLocalChanges) {
-                        echo "There are uncommitted changes in the local repository."
-                        error("Local changes detected. Please commit or stash your changes.")
-                    }
+7.3 Issue Tracking Tools
+Mention tools for tracking issues (e.g., JIRA, Bugzilla).
 
-                    // Get the latest commit hash of the current branch (local)
-                    def localCommit = sh(returnStdout: true, script: 'git rev-parse HEAD').trim()
+8. Backup and Recovery
 
-                    // Get the latest commit hash of the current branch (remote)
-                    def remoteCommit = sh(returnStdout: true, script: 'git rev-parse @{u}').trim()
+8.1 Backup Strategy
+Define frequency and method of backups for critical items.
 
-                    // Compare the commit hashes
-                    if (localCommit == remoteCommit) {
-                        echo "Source is up-to-date with the latest version in Git."
-                    } else {
-                        echo "Source is NOT up-to-date with the latest version in Git."
-                        error("Source is out-of-date. Update required.")
-                    }
-                }
-            }
-        }
-        stage('Build') {
-            steps {
-                // Your build steps here
-                echo "Proceeding with the build..."
-            }
-        }
-    }
-}
+8.2 Recovery Plan
+Explain steps for recovery in case of data loss or corruption.
 
-pipeline {
-    agent {
-        node {
-            customWorkspace "${env.BRANCH_WORKSPACE}"
-        }
-    }
-    environment {
-        BRANCH_WORKSPACE = "${getBranchWorkspace()}"
-    }
-    stages {
-        stage('Determine Workspace') {
-            steps {
-                script {
-                    echo "Branch type: ${env.GIT_BRANCH}"
-                    echo "Using workspace: ${env.BRANCH_WORKSPACE}"
-                }
-            }
-        }
-        stage('Build') {
-            steps {
-                echo "Building project in workspace: ${env.BRANCH_WORKSPACE}"
-                // Add build steps here
-            }
-        }
-    }
-}
+9. Maintenance and Updates
 
-def getBranchWorkspace() {
-    def branch = env.GIT_BRANCH ?: 'default'
-    if (branch.startsWith('feature/')) {
-        return '/workspaces/feature'
-    } else if (branch.startsWith('release/')) {
-        return '/workspaces/release'
-    } else if (branch.startsWith('main') || branch.startsWith('master')) {
-        return '/workspaces/main'
-    } else {
-        return '/workspaces/default'
-    }
-}
+Detail how the CMP will be maintained and updated throughout the project lifecycle.
 
+10. Approval and Sign-Off
 
+Include a table for approvals:
+
+Role	Name	Date	Signature
+Project Manager	[Name]	[Date]	[Signature]
+Configuration Manager	[Name]	[Date]	[Signature]
+
+If you’d like, I can turn this into a downloadable document or refine it further based on specific project details. Let me know your preferences!
