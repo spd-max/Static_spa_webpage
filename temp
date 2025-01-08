@@ -1,35 +1,78 @@
-<project name="MyApplication" default="build" basedir=".">
-    <property name="version" value="1.0.0" />
-    <property name="vendor" value="MyCompany" />
-    <property name="build.date" value="${TODAY}" />
+pipeline {
+    agent any
+    environment {
+        ARTIFACTORY_URL = 'https://artifactory.example.com/path/to/jar/MyApplication.jar'
+        LOCAL_JAR = 'workspace\\MyApplication.jar'
+        ARTIFACTORY_JAR = 'workspace\\ArtifactoryJar.jar'
+    }
+    stages {
+        stage('Fetch Artifactory JAR') {
+            steps {
+                script {
+                    // Download the JAR from Artifactory
+                    bat "curl -o ${ARTIFACTORY_JAR} %ARTIFACTORY_URL%"
+                }
+            }
+        }
+        stage('Compare JARs') {
+            steps {
+                script {
+                    // Extract version from local JAR
+                    def localVersion = bat(
+                        script: "findstr Implementation-Version META-INF\\MANIFEST.MF",
+                        returnStdout: true
+                    ).trim().split(':')[1].trim()
 
-    <!-- Set Build Date -->
-    <tstamp>
-        <format property="TODAY" pattern="yyyy-MM-dd" />
-    </tstamp>
+                    // Extract version from Artifactory JAR
+                    bat "unzip -o ${ARTIFACTORY_JAR} META-INF/MANIFEST.MF -d workspace"
+                    def artifactoryVersion = bat(
+                        script: "findstr Implementation-Version workspace\\META-INF\\MANIFEST.MF",
+                        returnStdout: true
+                    ).trim().split(':')[1].trim()
 
-    <target name="clean">
-        <delete dir="build" />
-    </target>
+                    // Calculate size
+                    def localSize = bat(
+                        script: "for %I in (${LOCAL_JAR}) do @echo %~zI",
+                        returnStdout: true
+                    ).trim()
+                    def artifactorySize = bat(
+                        script: "for %I in (${ARTIFACTORY_JAR}) do @echo %~zI",
+                        returnStdout: true
+                    ).trim()
 
-    <target name="compile">
-        <mkdir dir="build/classes" />
-        <javac srcdir="src" destdir="build/classes" />
-    </target>
+                    // Calculate checksum
+                    def localChecksum = bat(
+                        script: "certutil -hashfile ${LOCAL_JAR} SHA256 | findstr -v certutil",
+                        returnStdout: true
+                    ).trim()
+                    def artifactoryChecksum = bat(
+                        script: "certutil -hashfile ${ARTIFACTORY_JAR} SHA256 | findstr -v certutil",
+                        returnStdout: true
+                    ).trim()
 
-    <target name="jar" depends="compile">
-        <mkdir dir="build/jar" />
-        <jar destfile="build/jar/MyApplication-${version}.jar" basedir="build/classes">
-            <!-- Custom MANIFEST -->
-            <manifest>
-                <attribute name="Main-Class" value="com.example.MainClass" />
-                <attribute name="Implementation-Title" value="MyApplication" />
-                <attribute name="Implementation-Version" value="${version}" />
-                <attribute name="Implementation-Vendor" value="${vendor}" />
-                <attribute name="Build-Date" value="${build.date}" />
-            </manifest>
-        </jar>
-    </target>
-
-    <target name="build" depends="clean, jar" />
-</project>
+                    // Compare all aspects
+                    if (localVersion == artifactoryVersion &&
+                        localSize == artifactorySize &&
+                        localChecksum == artifactoryChecksum) {
+                        echo "JARs are identical. Skipping further steps."
+                        currentBuild.result = 'SUCCESS'
+                        return
+                    } else {
+                        echo "JARs are different. Proceeding with the build."
+                    }
+                }
+            }
+        }
+        stage('Perform Build Steps') {
+            when {
+                expression {
+                    currentBuild.result != 'SUCCESS'
+                }
+            }
+            steps {
+                echo "Performing the build as the JARs are different..."
+                // Add your build steps here
+            }
+        }
+    }
+}
