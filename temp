@@ -1,57 +1,35 @@
-Deploying online upgrades for new or existing cache model classes without restarting the Coherence cluster is a complex challenge, and Spring can provide some advantages, though it may not solve all the issues out-of-the-box. Here’s an analysis to help decide whether adopting Spring or sticking with the legacy Ant model is wiser for your use case.
+<project name="MyApplication" default="build" basedir=".">
+    <property name="version" value="1.0.0" />
+    <property name="vendor" value="MyCompany" />
+    <property name="build.date" value="${TODAY}" />
 
-Challenges with Legacy Deployment
-	1.	Cluster Restart Overhead:
-Restarting Coherence cluster services disrupts operations, affecting availability and increasing downtime.
-	2.	Dependency on JAR Replacement:
-Deploying updates requires replacing the entire JAR file, even for small changes, which can be error-prone and time-consuming.
-	3.	Compatibility Issues:
-Changes to existing model classes can lead to serialization/deserialization problems or cache invalidation.
+    <!-- Set Build Date -->
+    <tstamp>
+        <format property="TODAY" pattern="yyyy-MM-dd" />
+    </tstamp>
 
-How Spring Could Help
-	1.	Hot Reload and Dynamic Updates:
-Spring Boot DevTools supports hot reloading for certain configurations. However, this feature is more suited for development and may not directly support Coherence cluster-wide updates in production.
-Limitations:
-Spring’s hot-reload capabilities are limited for production-grade deployments involving Coherence.
-	2.	Dependency Injection and Modular Code:
-	•	Spring can simplify dynamic component loading using dependency injection. You can load new beans (e.g., new cache model classes) dynamically at runtime without affecting the rest of the application.
-	•	Using Spring profiles or configuration properties, you could activate or deactivate features dynamically.
-	3.	Remote Configuration:
-Spring Cloud Config can help centralize and dynamically manage configuration files, enabling partial updates to cache properties without requiring a cluster restart.
-	4.	Improved CI/CD Integration:
-Moving from Ant to Maven/Gradle and leveraging Spring can streamline builds, making it easier to deploy updates.
-	5.	Declarative Transactions:
-With Spring, you can implement sophisticated transaction management, helping ensure consistency when upgrading model classes while caches are still active.
-	6.	Easier Code Maintenance:
-Spring’s abstractions make it easier to maintain and evolve the codebase, potentially reducing risks during deployment.
+    <target name="clean">
+        <delete dir="build" />
+    </target>
 
-Limitations of Spring for Your Use Case
-	•	No Direct Coherence Hot-Reload Support:
-Spring does not inherently provide a mechanism to hot-replace classes in a Coherence cluster.
-	•	Custom Work Needed:
-To enable true online upgrades, you would need to implement mechanisms such as:
-	•	Custom class loading and dynamic code deployment.
-	•	Integration with Coherence’s Extend APIs to manage cache upgrades dynamically.
+    <target name="compile">
+        <mkdir dir="build/classes" />
+        <javac srcdir="src" destdir="build/classes" />
+    </target>
 
-Alternative Approaches for Online Upgrades
-	1.	Leverage Coherence Extend and Custom Loaders:
-You can use Coherence’s Extend APIs to deploy new cache model classes dynamically without restarting the cluster. This approach requires careful design but avoids the need for cluster downtime.
-	2.	Consider Continuous Deployment Practices:
-Adopt blue-green or canary deployment strategies where updates are gradually rolled out to specific nodes or clusters to minimize disruption.
-	3.	Dynamic Proxy/Adapter Classes:
-Introduce a layer of abstraction between the cache and the application logic. This can help you adapt to changes in cache model classes dynamically without breaking existing functionality.
+    <target name="jar" depends="compile">
+        <mkdir dir="build/jar" />
+        <jar destfile="build/jar/MyApplication-${version}.jar" basedir="build/classes">
+            <!-- Custom MANIFEST -->
+            <manifest>
+                <attribute name="Main-Class" value="com.example.MainClass" />
+                <attribute name="Implementation-Title" value="MyApplication" />
+                <attribute name="Implementation-Version" value="${version}" />
+                <attribute name="Implementation-Vendor" value="${vendor}" />
+                <attribute name="Build-Date" value="${build.date}" />
+            </manifest>
+        </jar>
+    </target>
 
-Stick with Ant or Move to Spring?
-
-Criteria	Ant Model	Spring
-Deployment Complexity	Requires JAR replacement and cluster restart.	Supports modular and dynamic loading (to some extent).
-Online Upgrades	Challenging without custom logic.	Limited unless integrated with advanced solutions.
-Ease of Use	High learning curve for dynamic upgrades.	Easier configuration and modularity.
-Future Scalability	Limited flexibility.	Better suited for evolving requirements.
-Cluster Downtime	Restart required for all changes.	Can reduce downtime for non-critical updates.
-
-Recommendation
-
-If zero-downtime updates are a critical requirement, Spring alone may not solve your problem entirely, but it can simplify other aspects of deployment and scalability. Pairing Spring with Coherence’s Extend APIs or custom dynamic loaders might be a viable path.
-
-If the project has stable deployment cycles and does not require frequent model updates, sticking with the legacy Ant model could suffice for now, as long as you implement proper CI/CD practices to streamline JAR replacements.
+    <target name="build" depends="clean, jar" />
+</project>
