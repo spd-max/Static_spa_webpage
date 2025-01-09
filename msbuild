@@ -1,0 +1,91 @@
+Given that you cannot modify the batch script or the Java jar file, the solution must rely on MSBuild’s ability to determine whether a file’s content has truly changed, even if its timestamp has been updated. Unfortunately, MSBuild by default uses timestamps to decide whether a file needs rebuilding. To avoid unnecessary rebuilds, you can introduce an additional step in the MSBuild process to check file content.
+
+Here’s how you can implement this within MSBuild:
+
+1. Use a Pre-Build Step to Compare Content
+
+Before invoking the compiler, add a custom MSBuild step to compare the content of the generated files with their previous versions. This step can use a hashing mechanism (e.g., MD5 or SHA256) to detect content changes.
+
+Steps:
+	1.	Store a hash (or checksum) of each file in a temporary file during a previous build.
+	2.	During subsequent builds, compare the stored hash with the current hash of the file.
+	3.	Skip files that have the same hash by preventing MSBuild from considering them as updated.
+
+Add this logic to your .vcxproj file:
+
+<Target Name="PreCompileCheck" BeforeTargets="ClCompile">
+  <ItemGroup>
+    <GeneratedFiles Include="path\to\generated\*.cpp" />
+  </ItemGroup>
+  <Exec Command="python hash_compare.py %(GeneratedFiles.FullPath)" />
+</Target>
+
+The hash_compare.py script can compare content and skip updates for unchanged files. For example:
+
+import hashlib
+import os
+import sys
+
+def calculate_hash(file_path):
+    with open(file_path, 'rb') as f:
+        return hashlib.md5(f.read()).hexdigest()
+
+def main():
+    for file_path in sys.argv[1:]:
+        hash_file = file_path + ".hash"
+        current_hash = calculate_hash(file_path)
+
+        if os.path.exists(hash_file):
+            with open(hash_file, 'r') as f:
+                previous_hash = f.read()
+            if previous_hash == current_hash:
+                print(f"No changes: {file_path}")
+                continue
+
+        with open(hash_file, 'w') as f:
+            f.write(current_hash)
+        print(f"Updated: {file_path}")
+
+if __name__ == "__main__":
+    main()
+
+2. Add a Custom Task to MSBuild
+
+If you prefer to avoid external scripts, you can create a custom MSBuild task to perform the same functionality.
+
+Add the following to your project file:
+
+<Target Name="SkipUnchangedGeneratedFiles" BeforeTargets="ClCompile">
+  <ItemGroup>
+    <GeneratedFiles Include="path\to\generated\*.cpp" />
+  </ItemGroup>
+  <Message Text="Checking content of generated files..." />
+  <Exec Command="fc /B %(GeneratedFiles.FullPath) %(GeneratedFiles.FullPath).lastbuild" Condition="Exists('%(GeneratedFiles.FullPath).lastbuild')" />
+  <Exec Command="copy %(GeneratedFiles.FullPath) %(GeneratedFiles.FullPath).lastbuild" Condition="!Exists('%(GeneratedFiles.FullPath).lastbuild') OR ErrorLevel == 1" />
+</Target>
+
+Here:
+	•	fc /B compares the binary content of the current file with the stored version.
+	•	Only files with differences are updated.
+
+3. Force MSBuild to Skip Unchanged Files
+
+Ensure that MSBuild respects the unchanged files by leveraging the Inputs and Outputs properties. Update your .vcxproj file to include:
+
+<CustomBuild Include="path\to\generated\*.cpp">
+  <Command>echo Generating %(Identity)</Command>
+  <Outputs>%(FullPath).obj</Outputs>
+  <Inputs>%(FullPath)</Inputs>
+</CustomBuild>
+
+4. Verify Incremental Build Behavior
+
+After adding the above steps, verify MSBuild’s incremental build behavior:
+	1.	Run the build twice consecutively.
+	2.	Observe that unchanged files are not rebuilt during the second build.
+
+Use diagnostic logging to confirm:
+
+msbuild project.sln /verbosity:diagnostic > build_log.txt
+
+This approach ensures that only files with content changes trigger a rebuild, even if the batch script updates the timestamps.
