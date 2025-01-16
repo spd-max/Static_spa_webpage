@@ -83,3 +83,42 @@ Additional Optimization Suggestions
 	•	Use SQL Server’s execution plan to monitor and optimize query performance.
 
 Let me know if you need further refinements!
+
+********
+CREATE PROCEDURE GetSeriesByAttributes
+    @FilterCriteria FilterTableType READONLY -- Accept the filter table as a parameter
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Step 1: Find all Series_name where the given criteria matches completely
+    SELECT t.Series_name
+    INTO #MatchingSeries
+    FROM YourTable t
+    JOIN @FilterCriteria f
+        ON (t.attribute = 'inst_type' AND t.value = f.inst_type)
+    GROUP BY t.Series_name
+    HAVING COUNT(DISTINCT CASE WHEN t.attribute = f.attribute AND t.value = f.value THEN f.attribute END) = 
+           (SELECT COUNT(*) FROM @FilterCriteria WHERE inst_type = f.inst_type);
+
+    -- Step 2: Fetch all rows for the matching Series_name
+    SELECT t.*
+    FROM YourTable t
+    JOIN #MatchingSeries s
+        ON t.Series_name = s.Series_name;
+
+    -- Cleanup
+    DROP TABLE #MatchingSeries;
+END;
+
+-- Create a non-clustered index on attribute and value for filtering
+CREATE NONCLUSTERED INDEX IDX_Attribute_Value
+ON YourTable (attribute, value);
+
+-- Create a non-clustered index on Series_name for joining
+CREATE NONCLUSTERED INDEX IDX_SeriesName
+ON YourTable (Series_name);
+
+-- Optional: If your table has frequent searches involving all three columns together
+CREATE NONCLUSTERED INDEX IDX_Attribute_Value_SeriesName
+ON YourTable (attribute, value, Series_name);
