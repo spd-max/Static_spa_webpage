@@ -1,43 +1,49 @@
 CREATE PROCEDURE GetSeriesByAttributes
-    @FilterCriteria FilterTableType READONLY -- Accept the filter table as a parameter
+    @FilterCriteria FilterTableType READONLY -- Accept user input as a parameter
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Step 1: Filter the main table to find relevant SERIES_NAME
-    SELECT DISTINCT t.SERIES_NAME
-    INTO #MatchingSeries
-    FROM YourTable t
-    JOIN @FilterCriteria f
-        ON (
-            (t.ATT_NAME = 'inst_type' AND t.ATT_VALUE = f.INSTRUMENT) OR
-            (t.ATT_NAME = f.ATTRIBUTE AND t.ATT_VALUE = f.ATTRIBUTE_VALUE)
-        )
-    GROUP BY t.SERIES_NAME
-    HAVING COUNT(DISTINCT f.ATTRIBUTE) = 
-           (SELECT COUNT(*) FROM @FilterCriteria WHERE INSTRUMENT = f.INSTRUMENT);
+    -- Step 1: Declare variables for dynamic SQL
+    DECLARE @RelevantAttributes NVARCHAR(MAX), @FilterConditions NVARCHAR(MAX), @DynamicSQL NVARCHAR(MAX);
 
-    -- Step 2: Pivot only the filtered series
-    DECLARE @Columns NVARCHAR(MAX), @DynamicSQL NVARCHAR(MAX);
+    -- Step 2: Identify relevant attributes dynamically (from user-provided filter table)
+    SELECT @RelevantAttributes = STRING_AGG(QUOTENAME(ATTRIBUTE), ',')
+    FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria) AS Attrs;
 
-    -- Get dynamic list of attributes
-    SELECT @Columns = STRING_AGG(QUOTENAME(ATT_NAME), ',') WITHIN GROUP (ORDER BY ATT_NAME)
-    FROM (SELECT DISTINCT ATT_NAME FROM YourTable) AS Attrs;
+    -- Step 3: Generate dynamic WHERE conditions for filtering pivoted data
+    SELECT @FilterConditions = STRING_AGG(
+        'p.' + QUOTENAME(ATTRIBUTE) + ' = f.ATTRIBUTE_VALUE AND f.ATTRIBUTE = ''' + ATTRIBUTE + '''',
+        ' AND '
+    )
+    FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria) AS Attrs;
 
-    -- Build dynamic SQL for pivoting and final filtering
+    -- Ensure the variables are NVARCHAR(MAX) to avoid truncation
+    SET @RelevantAttributes = CAST(@RelevantAttributes AS NVARCHAR(MAX));
+    SET @FilterConditions = CAST(@FilterConditions AS NVARCHAR(MAX));
+
+    -- Step 4: Generate dynamic SQL for pivoting and filtering
     SET @DynamicSQL = '
-        SELECT SERIES_NAME, ' + @Columns + '
+        -- Step 4.1: Create pivoted table with only relevant attributes
+        SELECT SERIES_NAME, ' + @RelevantAttributes + '
         INTO #PivotedTable
         FROM (
             SELECT SERIES_NAME, ATT_NAME, ATT_VALUE
             FROM YourTable
-            WHERE SERIES_NAME IN (SELECT SERIES_NAME FROM #MatchingSeries)
+            WHERE ATT_NAME IN (SELECT ATTRIBUTE FROM @FilterCriteria) -- Process only relevant attributes
         ) AS SourceTable
         PIVOT (
-            MAX(ATT_VALUE) FOR ATT_NAME IN (' + @Columns + ')
+            MAX(ATT_VALUE) FOR ATT_NAME IN (' + @RelevantAttributes + ')
         ) AS PivotTable;
 
-        -- Fetch all rows for matching series
+        -- Step 4.2: Filter pivoted data based on filter conditions
+        SELECT DISTINCT p.SERIES_NAME
+        INTO #MatchingSeries
+        FROM #PivotedTable p
+        JOIN @FilterCriteria f
+            ON (' + @FilterConditions + ');
+
+        -- Step 4.3: Retrieve all rows for matching series from the original table
         SELECT t.*
         FROM YourTable t
         JOIN #MatchingSeries s
@@ -48,6 +54,6 @@ BEGIN
         DROP TABLE #MatchingSeries;
     ';
 
-    -- Execute dynamic SQL
-    EXEC sp_executesql @DynamicSQL;
+    -- Step 5: Execute the dynamic SQL
+    EXEC sp_executesql @DynamicSQL, N'@FilterCriteria FilterTableType READONLY', @FilterCriteria = @FilterCriteria;
 END;
