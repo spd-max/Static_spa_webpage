@@ -122,3 +122,35 @@ ON YourTable (Series_name);
 -- Optional: If your table has frequent searches involving all three columns together
 CREATE NONCLUSTERED INDEX IDX_Attribute_Value_SeriesName
 ON YourTable (attribute, value, Series_name);
+
+
+
+
+CREATE PROCEDURE GetSeriesByAttributes
+    @FilterCriteria FilterTableType READONLY -- Accept the filter table as a parameter
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Step 1: Find all Series_name that match ALL filter criteria
+    SELECT t.Series_name
+    INTO #MatchingSeries
+    FROM YourTable t
+    JOIN @FilterCriteria f
+        ON (
+            (t.attribute = 'inst_type' AND t.value = f.inst_type)
+            OR (t.attribute = f.attribute AND t.value = f.value)
+        )
+    GROUP BY t.Series_name
+    HAVING COUNT(DISTINCT f.attribute + '|' + f.value) = 
+           (SELECT COUNT(*) FROM @FilterCriteria);
+
+    -- Step 2: Fetch all rows for the matching Series_name
+    SELECT t.*
+    FROM YourTable t
+    JOIN #MatchingSeries s
+        ON t.Series_name = s.Series_name;
+
+    -- Cleanup
+    DROP TABLE #MatchingSeries;
+END;
