@@ -1,156 +1,59 @@
-Understood. To address the changes and optimize the stored procedure for performance:
-
-Key Changes
-	1.	Temporary Table as Input Parameter: The stored procedure will now accept the temporary table as a parameter using TABLE TYPE.
-	2.	Support for Multiple inst_type Values: The procedure will handle scenarios where users supply multiple inst_type values.
-	3.	Performance Optimization:
-	•	Use indexed temporary tables or common table expressions (CTEs) for faster filtering.
-	•	Minimize intermediate operations.
-
-Updated Stored Procedure
-
-First, define a TABLE TYPE for the input temporary table:
-
--- Define a Table Type for input
-CREATE TYPE FilterTableType AS TABLE (
-    inst_type NVARCHAR(50),
-    attribute NVARCHAR(50),
-    value NVARCHAR(50)
-);
-
-Now, create the stored procedure:
-
 CREATE PROCEDURE GetSeriesByAttributes
     @FilterCriteria FilterTableType READONLY -- Accept the filter table as a parameter
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Step 1: Select all Series_name matching the filter criteria
-    -- Filter based on the matching `inst_type`, `attribute`, and `value`
-    SELECT DISTINCT t.Series_name
-    INTO #MatchingSeries
-    FROM YourTable t
-    JOIN @FilterCriteria f
-        ON (
-            (t.attribute = 'inst_type' AND t.value = f.inst_type) OR
-            (t.attribute = f.attribute AND t.value = f.value)
-        );
+    -- Step 1: Declare variables for dynamic SQL
+    DECLARE @Columns NVARCHAR(MAX), @FilterConditions NVARCHAR(MAX), @DynamicSQL NVARCHAR(MAX);
 
-    -- Step 2: Fetch all rows for the matching Series_name
-    SELECT t.*
-    FROM YourTable t
-    JOIN #MatchingSeries s
-        ON t.Series_name = s.Series_name;
+    -- Step 2: Get the unique list of attributes (ensure NVARCHAR(MAX))
+    SELECT @Columns = STRING_AGG(QUOTENAME(ATT_NAME), ',') WITHIN GROUP (ORDER BY ATT_NAME)
+    FROM (SELECT DISTINCT CAST(ATT_NAME AS NVARCHAR(MAX)) AS ATT_NAME FROM YourTable) AS Attrs;
 
-    -- Drop the temporary table
-    DROP TABLE #MatchingSeries;
-END;
+    -- Step 3: Dynamically generate filter conditions (ensure NVARCHAR(MAX))
+    SELECT @FilterConditions = STRING_AGG(
+        'p.' + QUOTENAME(CAST(ATT_NAME AS NVARCHAR(MAX))) + ' = f.[ATTRIBUTE_VALUE] AND f.[ATTRIBUTE] = ''' + CAST(ATT_NAME AS NVARCHAR(MAX)) + '''',
+        ' AND '
+    ) WITHIN GROUP (ORDER BY ATT_NAME)
+    FROM (SELECT DISTINCT CAST(ATT_NAME AS NVARCHAR(MAX)) AS ATT_NAME FROM YourTable) AS Attrs;
 
-Explanation of Updates
-	1.	Input Parameter as Table Type:
-	•	The procedure accepts @FilterCriteria, which is a table parameter of type FilterTableType.
-	•	The calling application must populate this parameter before executing the stored procedure.
-	2.	Dynamic inst_type Handling:
-	•	The logic now includes a condition to match inst_type values provided in the filter criteria.
-	•	Matches rows where inst_type is specified or specific attributes/values are present.
-	3.	Performance Enhancements:
-	•	The use of #MatchingSeries ensures that the filtering on Series_name is done first, reducing the dataset size before fetching all rows.
-	•	The filter is executed as a join, leveraging indexes on attribute and value.
+    -- Step 4: Ensure both variables are treated as NVARCHAR(MAX)
+    SET @Columns = CAST(@Columns AS NVARCHAR(MAX));
+    SET @FilterConditions = CAST(@FilterConditions AS NVARCHAR(MAX));
 
-Usage Example
+    -- Step 5: Build the dynamic SQL for pivoting and filtering
+    SET @DynamicSQL = '
+        -- Create pivoted table
+        SELECT SERIES_NAME, ' + @Columns + '
+        INTO #PivotedTable
+        FROM (
+            SELECT SERIES_NAME, ATT_NAME, ATT_VALUE
+            FROM YourTable
+        ) AS SourceTable
+        PIVOT (
+            MAX(ATT_VALUE) FOR ATT_NAME IN (' + @Columns + ')
+        ) AS PivotTable;
 
-To call this procedure:
+        -- Filter pivoted table
+        SELECT p.SERIES_NAME
+        INTO #MatchingSeries
+        FROM #PivotedTable p
+        JOIN @FilterCriteria f
+            ON (p.inst_type = f.[INSTRUMENT] OR f.[INSTRUMENT] IS NULL)
+            AND (' + @FilterConditions + ');
 
--- Declare and populate the filter table
-DECLARE @FilterCriteria FilterTableType;
-INSERT INTO @FilterCriteria (inst_type, attribute, value)
-VALUES 
-    ('CASH', 'CCY', 'INR'),
-    ('CASH', 'STATE', 'TN'),
-    ('CARD', 'CCY', 'USD'),
-    ('CHEQUE', 'STATE', 'KA');
+        -- Fetch all rows for matching series
+        SELECT t.*
+        FROM YourTable t
+        JOIN #MatchingSeries s
+            ON t.SERIES_NAME = s.SERIES_NAME;
 
--- Execute the stored procedure
-EXEC GetSeriesByAttributes @FilterCriteria;
+        -- Cleanup temporary tables
+        DROP TABLE #PivotedTable;
+        DROP TABLE #MatchingSeries;
+    ';
 
-Additional Optimization Suggestions
-	1.	Indexing:
-	•	Ensure the table YourTable has composite indexes on (attribute, value) and (Series_name) for faster filtering.
-	2.	Partitioning:
-	•	If the table is extremely large, consider partitioning by Series_name or other logical keys.
-	3.	Query Plan Monitoring:
-	•	Use SQL Server’s execution plan to monitor and optimize query performance.
-
-Let me know if you need further refinements!
-
-********
-CREATE PROCEDURE GetSeriesByAttributes
-    @FilterCriteria FilterTableType READONLY -- Accept the filter table as a parameter
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    -- Step 1: Find all Series_name where the given criteria matches completely
-    SELECT t.Series_name
-    INTO #MatchingSeries
-    FROM YourTable t
-    JOIN @FilterCriteria f
-        ON (t.attribute = 'inst_type' AND t.value = f.inst_type)
-    GROUP BY t.Series_name
-    HAVING COUNT(DISTINCT CASE WHEN t.attribute = f.attribute AND t.value = f.value THEN f.attribute END) = 
-           (SELECT COUNT(*) FROM @FilterCriteria WHERE inst_type = f.inst_type);
-
-    -- Step 2: Fetch all rows for the matching Series_name
-    SELECT t.*
-    FROM YourTable t
-    JOIN #MatchingSeries s
-        ON t.Series_name = s.Series_name;
-
-    -- Cleanup
-    DROP TABLE #MatchingSeries;
-END;
-
--- Create a non-clustered index on attribute and value for filtering
-CREATE NONCLUSTERED INDEX IDX_Attribute_Value
-ON YourTable (attribute, value);
-
--- Create a non-clustered index on Series_name for joining
-CREATE NONCLUSTERED INDEX IDX_SeriesName
-ON YourTable (Series_name);
-
--- Optional: If your table has frequent searches involving all three columns together
-CREATE NONCLUSTERED INDEX IDX_Attribute_Value_SeriesName
-ON YourTable (attribute, value, Series_name);
-
-
-
-
-CREATE PROCEDURE GetSeriesByAttributes
-    @FilterCriteria FilterTableType READONLY -- Accept the filter table as a parameter
-AS
-BEGIN
-    SET NOCOUNT ON;
-
-    -- Step 1: Find all Series_name that match ALL filter criteria
-    SELECT t.Series_name
-    INTO #MatchingSeries
-    FROM YourTable t
-    JOIN @FilterCriteria f
-        ON (
-            (t.attribute = 'inst_type' AND t.value = f.inst_type)
-            OR (t.attribute = f.attribute AND t.value = f.value)
-        )
-    GROUP BY t.Series_name
-    HAVING COUNT(DISTINCT f.attribute + '|' + f.value) = 
-           (SELECT COUNT(*) FROM @FilterCriteria);
-
-    -- Step 2: Fetch all rows for the matching Series_name
-    SELECT t.*
-    FROM YourTable t
-    JOIN #MatchingSeries s
-        ON t.Series_name = s.Series_name;
-
-    -- Cleanup
-    DROP TABLE #MatchingSeries;
+    -- Step 6: Execute dynamic SQL
+    EXEC sp_executesql @DynamicSQL, N'@FilterCriteria FilterTableType READONLY', @FilterCriteria = @FilterCriteria;
 END;
