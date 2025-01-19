@@ -18,6 +18,10 @@ BEGIN
     ) WITHIN GROUP (ORDER BY ATTRIBUTE)
     FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria WHERE ATTRIBUTE != 'inst_type') AS Attrs;
 
+    -- Debugging: Print generated columns and filter conditions
+    PRINT 'Generated Columns: ' + @Columns;
+    PRINT 'Generated Filter Conditions: ' + @FilterConditions;
+
     -- Ensure variables are treated as NVARCHAR(MAX) to avoid truncation
     SET @Columns = CAST(@Columns AS NVARCHAR(MAX));
     SET @FilterConditions = CAST(@FilterConditions AS NVARCHAR(MAX));
@@ -31,6 +35,9 @@ BEGIN
         JOIN @FilterCriteria f
             ON t.ATT_NAME = ''inst_type'' AND t.ATT_VALUE = f.INSTRUMENT;
 
+        -- Debugging: Check #MatchingInstType
+        SELECT * FROM #MatchingInstType;
+
         -- Step 4.2: Create a pivoted table for the remaining attributes
         SELECT SERIES_NAME, ' + @Columns + '
         INTO #PivotedTable
@@ -43,6 +50,9 @@ BEGIN
             MAX(ATT_VALUE) FOR ATT_NAME IN (' + @Columns + ')
         ) AS PivotTable;
 
+        -- Debugging: Check #PivotedTable
+        SELECT * FROM #PivotedTable;
+
         -- Step 4.3: Filter the pivoted table based on user input (excluding inst_type)
         SELECT DISTINCT p.SERIES_NAME
         INTO #MatchingSeries
@@ -51,6 +61,9 @@ BEGIN
             ON p.SERIES_NAME = m.SERIES_NAME
         JOIN @FilterCriteria f
             ON (' + @FilterConditions + ');
+
+        -- Debugging: Check #MatchingSeries
+        SELECT * FROM #MatchingSeries;
 
         -- Step 4.4: Retrieve all rows from the original table for matching series
         SELECT t.*
