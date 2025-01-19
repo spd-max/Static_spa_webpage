@@ -14,8 +14,12 @@ BEGIN
     SET NOCOUNT ON;
 
     -- Step 1: Filter Series based on InstCode from input table
-    DECLARE @InstCode NVARCHAR(50) = (SELECT DISTINCT INSTRUMENT FROM @FilterCriteria);
-    
+    DECLARE @InstCode NVARCHAR(50) = (
+        SELECT DISTINCT INSTRUMENT
+        FROM @FilterCriteria
+        WHERE INSTRUMENT IS NOT NULL
+    );
+
     -- Temporary table to store filtered series
     CREATE TABLE #FilteredSeries (
         SERIES_NAME NVARCHAR(50)
@@ -34,9 +38,12 @@ BEGIN
     SELECT @Columns = STRING_AGG(QUOTENAME(ATTRIBUTE), ',') WITHIN GROUP (ORDER BY ATTRIBUTE)
     FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria WHERE ATTRIBUTE != 'InstCode') AS Attrs;
 
+    -- Ensure @Columns is treated as NVARCHAR(MAX) to avoid truncation
+    SET @Columns = ISNULL(@Columns, '');
+
     -- Construct dynamic SQL for pivoting
     SET @DynamicSQL = '
-        SELECT t.SERIES_NAME, ' + @Columns + '
+        SELECT SERIES_NAME, ' + @Columns + '
         FROM (
             SELECT SERIES_NAME, ATT_NAME, ATT_VALUE
             FROM YourTable
@@ -47,6 +54,9 @@ BEGIN
             MAX(ATT_VALUE) FOR ATT_NAME IN (' + @Columns + ')
         ) AS PivotTable;
     ';
+
+    -- Debugging: Print dynamic SQL for verification
+    PRINT @DynamicSQL;
 
     -- Execute the dynamic SQL
     EXEC sp_executesql @DynamicSQL;
