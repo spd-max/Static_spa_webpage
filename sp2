@@ -7,46 +7,52 @@ BEGIN
     -- Step 1: Declare variables for dynamic SQL
     DECLARE @Columns NVARCHAR(MAX), @FilterConditions NVARCHAR(MAX), @DynamicSQL NVARCHAR(MAX);
 
-    -- Step 2: Dynamically identify relevant attributes from user-provided filter
+    -- Step 2: Dynamically identify relevant attributes (excluding 'inst_type')
     SELECT @Columns = STRING_AGG(QUOTENAME(ATTRIBUTE), ',') WITHIN GROUP (ORDER BY ATTRIBUTE)
-    FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria) AS Attrs;
+    FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria WHERE ATTRIBUTE != 'inst_type') AS Attrs;
 
-    -- Step 3: Generate filter conditions for WHERE clause
+    -- Step 3: Generate filter conditions for WHERE clause (excluding 'inst_type')
     SELECT @FilterConditions = STRING_AGG(
-        'COALESCE(p.' + QUOTENAME(ATTRIBUTE) + ', ''N/A'') = COALESCE(f.ATTRIBUTE_VALUE, ''N/A'') AND f.ATTRIBUTE = ''' + ATTRIBUTE + '''',
+        'COALESCE(NULLIF(p.' + QUOTENAME(ATTRIBUTE) + ', ''''), ''N/A'') = COALESCE(NULLIF(f.ATTRIBUTE_VALUE, ''''), ''N/A'') AND f.ATTRIBUTE = ''' + ATTRIBUTE + '''',
         ' AND '
     ) WITHIN GROUP (ORDER BY ATTRIBUTE)
-    FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria) AS Attrs;
+    FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria WHERE ATTRIBUTE != 'inst_type') AS Attrs;
 
-    -- Ensure the variables are treated as NVARCHAR(MAX)
+    -- Ensure variables are treated as NVARCHAR(MAX) to avoid truncation
     SET @Columns = CAST(@Columns AS NVARCHAR(MAX));
     SET @FilterConditions = CAST(@FilterConditions AS NVARCHAR(MAX));
 
     -- Step 4: Construct and execute the dynamic SQL
     SET @DynamicSQL = '
-        -- Step 4.1: Create a pivoted table with relevant attributes
+        -- Step 4.1: Filter series by inst_type first
+        SELECT DISTINCT SERIES_NAME
+        INTO #MatchingInstType
+        FROM YourTable t
+        JOIN @FilterCriteria f
+            ON t.ATT_NAME = ''inst_type'' AND t.ATT_VALUE = f.INSTRUMENT;
+
+        -- Step 4.2: Create a pivoted table for the remaining attributes
         SELECT SERIES_NAME, ' + @Columns + '
         INTO #PivotedTable
         FROM (
             SELECT SERIES_NAME, ATT_NAME, ATT_VALUE
             FROM YourTable
-            WHERE ATT_NAME IN (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria) -- Filter only relevant attributes
+            WHERE ATT_NAME IN (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria WHERE ATTRIBUTE != ''inst_type'') -- Filter only relevant attributes
         ) AS SourceTable
         PIVOT (
             MAX(ATT_VALUE) FOR ATT_NAME IN (' + @Columns + ')
         ) AS PivotTable;
 
-        -- Step 4.2: Filter the pivoted table based on user input
+        -- Step 4.3: Filter the pivoted table based on user input (excluding inst_type)
         SELECT DISTINCT p.SERIES_NAME
         INTO #MatchingSeries
         FROM #PivotedTable p
+        JOIN #MatchingInstType m
+            ON p.SERIES_NAME = m.SERIES_NAME
         JOIN @FilterCriteria f
             ON (' + @FilterConditions + ');
 
-        -- Debugging: Check the matched series
-        SELECT * FROM #MatchingSeries;
-
-        -- Step 4.3: Retrieve all rows from the original table for matching series
+        -- Step 4.4: Retrieve all rows from the original table for matching series
         SELECT t.*
         FROM YourTable t
         JOIN #MatchingSeries s
@@ -54,6 +60,7 @@ BEGIN
 
         -- Cleanup temporary tables
         DROP TABLE #PivotedTable;
+        DROP TABLE #MatchingInstType;
         DROP TABLE #MatchingSeries;
     ';
 
