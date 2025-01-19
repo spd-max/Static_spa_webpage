@@ -13,7 +13,7 @@ BEGIN
 
     -- Step 3: Generate filter conditions for WHERE clause
     SELECT @FilterConditions = STRING_AGG(
-        'p.' + QUOTENAME(ATTRIBUTE) + ' = f.ATTRIBUTE_VALUE AND f.ATTRIBUTE = ''' + ATTRIBUTE + '''',
+        'COALESCE(p.' + QUOTENAME(ATTRIBUTE) + ', ''N/A'') = COALESCE(f.ATTRIBUTE_VALUE, ''N/A'') AND f.ATTRIBUTE = ''' + ATTRIBUTE + '''',
         ' AND '
     ) WITHIN GROUP (ORDER BY ATTRIBUTE)
     FROM (SELECT DISTINCT ATTRIBUTE FROM @FilterCriteria) AS Attrs;
@@ -42,6 +42,9 @@ BEGIN
         FROM #PivotedTable p
         JOIN @FilterCriteria f
             ON (' + @FilterConditions + ');
+
+        -- Debugging: Check the matched series
+        SELECT * FROM #MatchingSeries;
 
         -- Step 4.3: Retrieve all rows from the original table for matching series
         SELECT t.*
