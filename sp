@@ -64,3 +64,41 @@ BEGIN
     -- Cleanup
     DROP TABLE #FilteredSeries;
 END;
+
+
+
+
+******^
+DECLARE @Columns NVARCHAR(MAX), @DynamicSQL NVARCHAR(MAX);
+
+-- Step 1: Generate the dynamic column list (attribute names)
+SELECT @Columns = STRING_AGG(QUOTENAME(ATTRIBUTE), ',') WITHIN GROUP (ORDER BY ATTRIBUTE)
+FROM (SELECT DISTINCT ATTRIBUTE FROM @UserInput) AS Attrs;
+
+-- Step 2: Generate the dynamic SQL to pivot the data
+SET @DynamicSQL = '
+    WITH RankedInput AS (
+        SELECT
+            INSTRUMENT,
+            ATTRIBUTE,
+            ATTRIBUTE_VALUE,
+            ROW_NUMBER() OVER (PARTITION BY INSTRUMENT, ATTRIBUTE ORDER BY ATTRIBUTE_VALUE) AS RowNum
+        FROM @UserInput
+    )
+    SELECT INSTRUMENT, ' + @Columns + '
+    FROM (
+        SELECT 
+            INSTRUMENT,
+            ATTRIBUTE,
+            ATTRIBUTE_VALUE,
+            RowNum
+        FROM RankedInput
+    ) AS SourceTable
+    PIVOT (
+        MAX(ATTRIBUTE_VALUE) FOR ATTRIBUTE IN (' + @Columns + ')
+    ) AS PivotTable
+    ORDER BY INSTRUMENT, RowNum;
+';
+
+-- Step 3: Execute the dynamic SQL
+EXEC sp_executesql @DynamicSQL, N'@UserInput UserInputTable READONLY', @UserInput = @UserInput;
