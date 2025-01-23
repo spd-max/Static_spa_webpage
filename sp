@@ -146,3 +146,28 @@ SET @DynamicSQL = '
 
 -- Step 3: Execute the dynamic SQL
 EXEC sp_executesql @DynamicSQL, N'@UserInput UserInputTable READONLY', @UserInput = @UserInput;
+
+
+
+
+DECLARE @Columns NVARCHAR(MAX), @DynamicSQL NVARCHAR(MAX);
+
+-- Step 1: Get all column names except "instrument" and "rownum"
+SELECT @Columns = STRING_AGG(
+    'UPDATE e
+    SET ' + QUOTENAME(COLUMN_NAME) + ' = COALESCE(e.' + QUOTENAME(COLUMN_NAME) + ', s.' + QUOTENAME(COLUMN_NAME) + ')
+    FROM ExistingTable e
+    INNER JOIN (
+        SELECT instrument, ' + QUOTENAME(COLUMN_NAME) + '
+        FROM ExistingTable
+        WHERE rownum = 1
+    ) AS s
+    ON e.instrument = s.instrument
+    WHERE e.rownum > 1 AND e.' + QUOTENAME(COLUMN_NAME) + ' IS NULL;',
+    CHAR(13) + CHAR(10)
+)
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'ExistingTable' AND COLUMN_NAME NOT IN ('instrument', 'rownum');
+
+-- Step 2: Execute the dynamic updates for each column
+EXEC sp_executesql @Columns;
