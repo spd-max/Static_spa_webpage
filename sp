@@ -171,3 +171,36 @@ WHERE TABLE_NAME = 'ExistingTable' AND COLUMN_NAME NOT IN ('instrument', 'rownum
 
 -- Step 2: Execute the dynamic updates for each column
 EXEC sp_executesql @Columns;
+
+
+
+
+DECLARE @Columns NVARCHAR(MAX), @DynamicSQL NVARCHAR(MAX);
+
+-- Step 1: Get all column names except "instrument" and "rownum"
+SELECT @Columns = STRING_AGG(QUOTENAME(COLUMN_NAME), ',')
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_NAME = 'ExistingTable' AND COLUMN_NAME NOT IN ('instrument', 'rownum');
+
+-- Step 2: Generate dynamic SQL to create and populate the new table
+SET @DynamicSQL = '
+    -- Create the new table
+    CREATE TABLE NewTable AS
+    SELECT 
+        e.instrument,
+        e.rownum,
+        ' + STRING_AGG(
+            'COALESCE(e.' + QUOTENAME(COLUMN_NAME) + ', s.' + QUOTENAME(COLUMN_NAME) + ') AS ' + QUOTENAME(COLUMN_NAME),
+            ', '
+        ) + '
+    FROM ExistingTable e
+    LEFT JOIN (
+        SELECT instrument, ' + @Columns + '
+        FROM ExistingTable
+        WHERE rownum = 1
+    ) AS s
+    ON e.instrument = s.instrument
+';
+
+-- Step 3: Execute the dynamic SQL
+EXEC sp_executesql @DynamicSQL;
