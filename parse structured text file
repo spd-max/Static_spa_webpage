@@ -1,0 +1,40 @@
+import json
+
+def parse_file(file_path, attributes_of_interest):
+    with open(file_path, "r") as file:
+        lines = file.readlines()
+
+    # Skip the first two metadata lines
+    data_lines = lines[2:]  
+
+    parsed_data = []
+    
+    for line in data_lines:
+        entry = {}
+        parts = line.strip().split()  # Split by space
+
+        for part in parts:
+            if "=" in part:
+                key, value = part.split("=", 1)  # Split only at first '='
+                value = value.strip('"')  # Remove quotes if it's a string
+
+                if key in attributes_of_interest:
+                    entry[key] = value
+        
+        if entry:
+            parsed_data.append(entry)
+
+    return parsed_data
+
+# Define attributes you are interested in
+attributes_of_interest = {"id", "name", "status", "timestamp"}
+
+# Parse file and convert to JSON
+parsed_json = parse_file("data.txt", attributes_of_interest)
+json_output = json.dumps(parsed_json, indent=4)
+
+# Save JSON output to file
+with open("output.json", "w") as json_file:
+    json_file.write(json_output)
+
+print(json_output)  # Print formatted JSON
