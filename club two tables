@@ -1,0 +1,25 @@
+DECLARE @sql NVARCHAR(MAX);
+
+-- Step 1: Get all columns from both tables
+WITH AllColumns AS (
+    SELECT COLUMN_NAME, TABLE_NAME 
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_NAME IN ('Table1', 'Table2')
+),
+DistinctColumns AS (
+    SELECT DISTINCT COLUMN_NAME FROM AllColumns
+)
+
+-- Step 2: Generate dynamic SELECT statements for each table
+SELECT @sql = 
+'CREATE VIEW CombinedView AS
+SELECT ' + 
+STRING_AGG('ISNULL(T1.' + COLUMN_NAME + ', T2.' + COLUMN_NAME + ') AS ' + COLUMN_NAME, ', ') + 
+'
+FROM (SELECT * FROM Table1) T1
+FULL OUTER JOIN (SELECT * FROM Table2) T2 
+ON T1.series_name = T2.series_name;'
+FROM DistinctColumns;
+
+-- Step 3: Execute the dynamic SQL to create the view
+EXEC sp_executesql @sql;
