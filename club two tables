@@ -64,3 +64,66 @@ SELECT @sql AS GeneratedSQL;
 
 -- Execute the dynamic SQL to create the view
 EXEC sp_executesql @sql;
+
+
+
+************++*******
+
+DECLARE @cols NVARCHAR(MAX);
+DECLARE @sql NVARCHAR(MAX);
+
+;WITH T1Cols AS (
+    SELECT COLUMN_NAME, 1 AS HasT1, 0 AS HasT2
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = 'core' 
+      AND TABLE_NAME = 'Table1'
+),
+T2Cols AS (
+    SELECT COLUMN_NAME, 0 AS HasT1, 1 AS HasT2
+    FROM INFORMATION_SCHEMA.COLUMNS 
+    WHERE TABLE_SCHEMA = 'core' 
+      AND TABLE_NAME = 'Table2'
+),
+AllCols AS (
+    -- Union the two sets so that every column (even if unique) is included
+    SELECT COLUMN_NAME, HasT1, HasT2 FROM T1Cols
+    UNION
+    SELECT COLUMN_NAME, HasT1, HasT2 FROM T2Cols
+),
+AggCols AS (
+    -- Group by column name to know which table(s) each column comes from
+    SELECT 
+        COLUMN_NAME,
+        MAX(HasT1) AS HasT1,
+        MAX(HasT2) AS HasT2
+    FROM AllCols
+    GROUP BY COLUMN_NAME
+)
+-- Use FOR XML PATH to aggregate into an NVARCHAR(MAX) string
+SELECT @cols = STUFF((
+    SELECT ', ' +
+        CASE 
+            WHEN MAX(HasT1) = 1 AND MAX(HasT2) = 1 
+                THEN 'ISNULL(T1.' + QUOTENAME(COLUMN_NAME) + ', T2.' + QUOTENAME(COLUMN_NAME) + ') AS ' + QUOTENAME(COLUMN_NAME)
+            WHEN MAX(HasT1) = 1 
+                THEN 'T1.' + QUOTENAME(COLUMN_NAME) + ' AS ' + QUOTENAME(COLUMN_NAME)
+            WHEN MAX(HasT2) = 1 
+                THEN 'T2.' + QUOTENAME(COLUMN_NAME) + ' AS ' + QUOTENAME(COLUMN_NAME)
+        END
+    FROM AggCols
+    FOR XML PATH(''), TYPE
+).value('.', 'NVARCHAR(MAX)'), 1, 2, '');
+
+-- Build the full dynamic SQL for creating the view
+SET @sql = 'CREATE VIEW core.CombinedView AS
+SELECT ' + @cols + '
+FROM core.Table1 T1
+FULL OUTER JOIN core.Table2 T2
+  ON T1.series_name = T2.series_name;';
+
+-- For debugging, you can view the full SQL:
+SELECT @sql AS GeneratedSQL;
+
+-- Execute the dynamic SQL to create the view
+EXEC sp_executesql @sql;
+
