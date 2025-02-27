@@ -1,4 +1,4 @@
-pipeline {
+ pipeline {
     agent any
     environment {
         ARTIFACTORY_URL = 'https://artifactory.example.com/path/to/jar/MyApplication.jar'
@@ -122,11 +122,11 @@ pipeline {
                     def jsonData = '''
                     {
                       "results": [
-                        { "uri": "https://domain/path/1.2.0/file.jar" },
-                        { "uri": "https://domain/path/1.3.0-RC/file.jar" },
-                        { "uri": "https://domain/path/2.0.0-SNAPSHOT/file.jar" },
-                        { "uri": "https://domain/path/1.10.0/file.jar" },
-                        { "uri": "https://domain/path/2.0.0/file.jar" }
+                        { "uri": "https://domain/path/1.2.0.5/file.jar" },
+                        { "uri": "https://domain/path/1.3.0.2-RC/file.jar" },
+                        { "uri": "https://domain/path/2.0.0.10-SNAPSHOT/file.jar" },
+                        { "uri": "https://domain/path/1.10.0.1/file.jar" },
+                        { "uri": "https://domain/path/2.0.0.15/file.jar" }
                       ]
                     }
                     '''
@@ -137,15 +137,15 @@ pipeline {
 
                     // Extract versions using regex
                     def versions = uris.collect { uri ->
-                        def matcher = (uri =~ /(\d+\.\d+(\.\d+)?(-SNAPSHOT|-RC)?)/)
+                        def matcher = (uri =~ /(\d+\.\d+\.\d+\.\d+(-SNAPSHOT|-RC)?)/)
                         return matcher ? matcher[0][0] : null
                     }.findAll { it != null }
 
-                    // Sort versions (natural sorting)
+                    // Sort versions using major.minor.patch.build logic
                     versions.sort { a, b -> 
-                        def aClean = a.replaceAll(/-SNAPSHOT|-RC/, "")
-                        def bClean = b.replaceAll(/-SNAPSHOT|-RC/, "")
-                        def compare = new groovy.util.VersionNumber(aClean) <=> new groovy.util.VersionNumber(bClean)
+                        def aParts = a.replaceAll(/-SNAPSHOT|-RC/, "").tokenize('.')*.toInteger()
+                        def bParts = b.replaceAll(/-SNAPSHOT|-RC/, "").tokenize('.')*.toInteger()
+                        def compare = aParts <=> bParts
                         return compare == 0 ? a <=> b : compare
                     }
 
