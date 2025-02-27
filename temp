@@ -76,3 +76,35 @@ pipeline {
         }
     }
 }
+
+
+
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Get Latest Artifact') {
+            steps {
+                powershell '''
+                $jsonData = (Invoke-RestMethod -Uri "<artifactory-api-url>").Content
+                $uris = ($jsonData | ConvertFrom-Json).results.uri
+
+                $versions = $uris | ForEach-Object {
+                    if ($_ -match "([0-9]+\\.[0-9]+(\\.[0-9]+)?(-SNAPSHOT|-RC)?)") {
+                        $matches[0]
+                    }
+                }
+
+                $sortedVersions = $versions | Sort-Object { $_ -replace "-SNAPSHOT|-RC", "" } -Descending
+                $latestVersion = $sortedVersions[0]
+
+                Write-Output "Latest Version: $latestVersion"
+
+                $latestUri = $uris | Where-Object { $_ -match "/$latestVersion/" }
+                Write-Output "Processing: $latestUri"
+                '''
+            }
+        }
+    }
+}
