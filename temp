@@ -1,116 +1,3 @@
- pipeline {
-    agent any
-    environment {
-        ARTIFACTORY_URL = 'https://artifactory.example.com/path/to/jar/MyApplication.jar'
-        LOCAL_JAR = 'workspace\\MyApplication.jar'
-        ARTIFACTORY_JAR = 'workspace\\ArtifactoryJar.jar'
-    }
-    stages {
-        stage('Fetch Artifactory JAR') {
-            steps {
-                script {
-                    // Download the JAR from Artifactory
-                    bat "curl -o ${ARTIFACTORY_JAR} %ARTIFACTORY_URL%"
-                }
-            }
-        }
-        stage('Compare JARs') {
-            steps {
-                script {
-                    // Extract version from local JAR
-                    def localVersion = bat(
-                        script: "findstr Implementation-Version META-INF\\MANIFEST.MF",
-                        returnStdout: true
-                    ).trim().split(':')[1].trim()
-
-                    // Extract version from Artifactory JAR
-                    bat "unzip -o ${ARTIFACTORY_JAR} META-INF/MANIFEST.MF -d workspace"
-                    def artifactoryVersion = bat(
-                        script: "findstr Implementation-Version workspace\\META-INF\\MANIFEST.MF",
-                        returnStdout: true
-                    ).trim().split(':')[1].trim()
-
-                    // Calculate size
-                    def localSize = bat(
-                        script: "for %I in (${LOCAL_JAR}) do @echo %~zI",
-                        returnStdout: true
-                    ).trim()
-                    def artifactorySize = bat(
-                        script: "for %I in (${ARTIFACTORY_JAR}) do @echo %~zI",
-                        returnStdout: true
-                    ).trim()
-
-                    // Calculate checksum
-                    def localChecksum = bat(
-                        script: "certutil -hashfile ${LOCAL_JAR} SHA256 | findstr -v certutil",
-                        returnStdout: true
-                    ).trim()
-                    def artifactoryChecksum = bat(
-                        script: "certutil -hashfile ${ARTIFACTORY_JAR} SHA256 | findstr -v certutil",
-                        returnStdout: true
-                    ).trim()
-
-                    // Compare all aspects
-                    if (localVersion == artifactoryVersion &&
-                        localSize == artifactorySize &&
-                        localChecksum == artifactoryChecksum) {
-                        echo "JARs are identical. Skipping further steps."
-                        currentBuild.result = 'SUCCESS'
-                        return
-                    } else {
-                        echo "JARs are different. Proceeding with the build."
-                    }
-                }
-            }
-        }
-        stage('Perform Build Steps') {
-            when {
-                expression {
-                    currentBuild.result != 'SUCCESS'
-                }
-            }
-            steps {
-                echo "Performing the build as the JARs are different..."
-                // Add your build steps here
-            }
-        }
-    }
-}
-
-
-
-
-pipeline {
-    agent any
-
-    stages {
-        stage('Get Latest Artifact') {
-            steps {
-                powershell '''
-                $jsonData = (Invoke-RestMethod -Uri "<artifactory-api-url>").Content
-                $uris = ($jsonData | ConvertFrom-Json).results.uri
-
-                $versions = $uris | ForEach-Object {
-                    if ($_ -match "([0-9]+\\.[0-9]+(\\.[0-9]+)?(-SNAPSHOT|-RC)?)") {
-                        $matches[0]
-                    }
-                }
-
-                $sortedVersions = $versions | Sort-Object { $_ -replace "-SNAPSHOT|-RC", "" } -Descending
-                $latestVersion = $sortedVersions[0]
-
-                Write-Output "Latest Version: $latestVersion"
-
-                $latestUri = $uris | Where-Object { $_ -match "/$latestVersion/" }
-                Write-Output "Processing: $latestUri"
-                '''
-            }
-        }
-    }
-}
-
-
-
 pipeline {
     agent any
 
@@ -126,7 +13,9 @@ pipeline {
                         { "uri": "https://domain/path/1.3.0.2-RC/file.jar" },
                         { "uri": "https://domain/path/2.0.0.10-SNAPSHOT/file.jar" },
                         { "uri": "https://domain/path/1.10.0.1/file.jar" },
-                        { "uri": "https://domain/path/2.0.0.15/file.jar" }
+                        { "uri": "https://domain/path/2.0.0.15/file.jar" },
+                        { "uri": "https://domain/path/21.1.0.375/file.jar" },
+                        { "uri": "https://domain/path/19.2.4578.0/file.jar" }
                       ]
                     }
                     '''
@@ -144,22 +33,30 @@ pipeline {
                     // Function to parse and compare versions
                     def parseVersion = { version ->
                         def cleanVersion = version.replaceAll(/-SNAPSHOT|-RC/, "")
-                        def parts = cleanVersion.tokenize('.')
+                        def parts = cleanVersion.tokenize('.').collect { it.toInteger() }
                         return [
-                            parts[0].toInteger(),  // major
-                            parts[1].toInteger(),  // minor
-                            parts[2].toInteger(),  // patch
-                            parts[3].toInteger(),  // build
-                            version.endsWith("-RC") ? 1 : version.endsWith("-SNAPSHOT") ? 2 : 0 // Stability rank: 0 = stable, 1 = RC, 2 = SNAPSHOT
+                            major: parts[0],
+                            minor: parts[1],
+                            patch: parts[2],
+                            build: parts[3],
+                            stability: version.endsWith("-RC") ? 1 : version.endsWith("-SNAPSHOT") ? 2 : 0 // 0 = stable, 1 = RC, 2 = SNAPSHOT
                         ]
                     }
 
-                    // Sort versions numerically
-                    versions.sort { a, b ->
+                    // Custom comparator for proper sorting
+                    def compareVersions = { a, b ->
                         def aParts = parseVersion(a)
                         def bParts = parseVersion(b)
-                        return aParts <=> bParts
+
+                        return aParts.major <=> bParts.major ?:
+                               aParts.minor <=> bParts.minor ?:
+                               aParts.patch <=> bParts.patch ?:
+                               aParts.build <=> bParts.build ?:
+                               aParts.stability <=> bParts.stability
                     }
+
+                    // Sort versions properly
+                    versions.sort(compareVersions)
 
                     // Get the latest version
                     def latestVersion = versions[-1]
