@@ -111,7 +111,6 @@ pipeline {
 
 
 
-
 pipeline {
     agent any
 
@@ -142,24 +141,24 @@ pipeline {
                         return matcher ? matcher[0][0] : null
                     }.findAll { it != null }
 
-                    // Sorting function for major.minor.patch.build format
-                    versions.sort { a, b -> 
-                        def aClean = a.replaceAll(/-SNAPSHOT|-RC/, "")
-                        def bClean = b.replaceAll(/-SNAPSHOT|-RC/, "")
-                        def aParts = aClean.tokenize('.')*.toInteger()
-                        def bParts = bClean.tokenize('.')*.toInteger()
-                        
-                        // Compare numeric parts first
-                        def compare = aParts <=> bParts
-                        
-                        // If numeric parts are equal, prioritize RC over SNAPSHOT, and stable versions over both
-                        if (compare == 0) {
-                            if (a.endsWith("-RC")) return -1
-                            if (b.endsWith("-RC")) return 1
-                            if (a.endsWith("-SNAPSHOT")) return -1
-                            if (b.endsWith("-SNAPSHOT")) return 1
-                        }
-                        return compare
+                    // Function to parse and compare versions
+                    def parseVersion = { version ->
+                        def cleanVersion = version.replaceAll(/-SNAPSHOT|-RC/, "")
+                        def parts = cleanVersion.tokenize('.')
+                        return [
+                            parts[0].toInteger(),  // major
+                            parts[1].toInteger(),  // minor
+                            parts[2].toInteger(),  // patch
+                            parts[3].toInteger(),  // build
+                            version.endsWith("-RC") ? 1 : version.endsWith("-SNAPSHOT") ? 2 : 0 // Stability rank: 0 = stable, 1 = RC, 2 = SNAPSHOT
+                        ]
+                    }
+
+                    // Sort versions numerically
+                    versions.sort { a, b ->
+                        def aParts = parseVersion(a)
+                        def bParts = parseVersion(b)
+                        return aParts <=> bParts
                     }
 
                     // Get the latest version
