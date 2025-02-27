@@ -108,3 +108,61 @@ pipeline {
         }
     }
 }
+
+
+
+pipeline {
+    agent any
+
+    stages {
+        stage('Get Latest Artifact') {
+            steps {
+                script {
+                    // Simulated JSON response (Replace with actual API call)
+                    def jsonData = '''
+                    {
+                      "results": [
+                        { "uri": "https://domain/path/1.2.0/file.jar" },
+                        { "uri": "https://domain/path/1.3.0-RC/file.jar" },
+                        { "uri": "https://domain/path/2.0.0-SNAPSHOT/file.jar" },
+                        { "uri": "https://domain/path/1.10.0/file.jar" },
+                        { "uri": "https://domain/path/2.0.0/file.jar" }
+                      ]
+                    }
+                    '''
+
+                    // Parse JSON
+                    def json = new groovy.json.JsonSlurper().parseText(jsonData)
+                    def uris = json.results*.uri
+
+                    // Extract versions using regex
+                    def versions = uris.collect { uri ->
+                        def matcher = (uri =~ /(\d+\.\d+(\.\d+)?(-SNAPSHOT|-RC)?)/)
+                        return matcher ? matcher[0][0] : null
+                    }.findAll { it != null }
+
+                    // Sort versions (natural sorting)
+                    versions.sort { a, b -> 
+                        def aClean = a.replaceAll(/-SNAPSHOT|-RC/, "")
+                        def bClean = b.replaceAll(/-SNAPSHOT|-RC/, "")
+                        def compare = new groovy.util.VersionNumber(aClean) <=> new groovy.util.VersionNumber(bClean)
+                        return compare == 0 ? a <=> b : compare
+                    }
+
+                    // Get the latest version
+                    def latestVersion = versions[-1]
+                    echo "Latest Version: ${latestVersion}"
+
+                    // Find the matching URI
+                    def latestUri = uris.find { it.contains("/${latestVersion}/") }
+                    echo "Processing: ${latestUri}"
+
+                    // Set as environment variables for later use
+                    env.LATEST_VERSION = latestVersion
+                    env.LATEST_URI = latestUri
+                }
+            }
+        }
+    }
+}
+
