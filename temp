@@ -111,6 +111,7 @@ pipeline {
 
 
 
+
 pipeline {
     agent any
 
@@ -141,12 +142,24 @@ pipeline {
                         return matcher ? matcher[0][0] : null
                     }.findAll { it != null }
 
-                    // Sort versions using major.minor.patch.build logic
+                    // Sorting function for major.minor.patch.build format
                     versions.sort { a, b -> 
-                        def aParts = a.replaceAll(/-SNAPSHOT|-RC/, "").tokenize('.')*.toInteger()
-                        def bParts = b.replaceAll(/-SNAPSHOT|-RC/, "").tokenize('.')*.toInteger()
+                        def aClean = a.replaceAll(/-SNAPSHOT|-RC/, "")
+                        def bClean = b.replaceAll(/-SNAPSHOT|-RC/, "")
+                        def aParts = aClean.tokenize('.')*.toInteger()
+                        def bParts = bClean.tokenize('.')*.toInteger()
+                        
+                        // Compare numeric parts first
                         def compare = aParts <=> bParts
-                        return compare == 0 ? a <=> b : compare
+                        
+                        // If numeric parts are equal, prioritize RC over SNAPSHOT, and stable versions over both
+                        if (compare == 0) {
+                            if (a.endsWith("-RC")) return -1
+                            if (b.endsWith("-RC")) return 1
+                            if (a.endsWith("-SNAPSHOT")) return -1
+                            if (b.endsWith("-SNAPSHOT")) return 1
+                        }
+                        return compare
                     }
 
                     // Get the latest version
@@ -165,4 +178,3 @@ pipeline {
         }
     }
 }
-
