@@ -26,10 +26,10 @@ pipeline {
     }
 }
 
-// Groovy Method to Extract Latest Version (Fixed)
+// Groovy Method to Extract Latest Version (Preserving Suffix)
 def findLatestVersion(String jsonString) {
     def json = new groovy.json.JsonSlurper().parseText(jsonString)
-    def versionPattern = ~/(\d+)\.(\d+)\.(\d+)\.(\d+)/
+    def versionPattern = ~/(\d+)\.(\d+)\.(\d+)\.(\d+)(-[A-Za-z0-9]+)?/
 
     def latest = json.results.collect { item ->
         def match = (item.uri =~ versionPattern)
@@ -38,11 +38,13 @@ def findLatestVersion(String jsonString) {
             def minor = match[0][2].toInteger()
             def patch = match[0][3].toInteger()
             def build = match[0][4].toInteger()
-            return [major, minor, patch, build, item.uri]
+            def suffix = match[0][5] ?: ""  // Capture suffix (-SNAPSHOT, -RC), default to empty if missing
+            def fullVersion = "${major}.${minor}.${patch}.${build}${suffix}"
+            return [major, minor, patch, build, fullVersion, item.uri]
         }
         return null
     }.findAll { it != null }
     .max { a, b -> [0, 1, 2, 3].findResult { i -> a[i] <=> b[i] ?: null } ?: 0 }
 
-    return latest ? [version: "${latest[0]}.${latest[1]}.${latest[2]}.${latest[3]}", uri: latest[4]] : null
+    return latest ? [version: latest[4], uri: latest[5]] : null
 }
