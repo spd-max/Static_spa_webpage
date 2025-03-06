@@ -26,58 +26,20 @@ pipeline {
     }
 }
 
-// Jenkins Function for Finding Latest Version using PowerShell
+// Groovy Method to Extract Latest Version
 def findLatestVersion(String jsonString) {
-    def jsonFilePath = 'data.json'
-    writeFile file: jsonFilePath, text: jsonString
+    def json = new groovy.json.JsonSlurper().parseText(jsonString)
+    def versionPattern = ~/(\d+)\.(\d+)\.(\d+)\.(\d+)/
 
-    try {
-        def result = powershell(script: """
-            \$jsonFile = '${jsonFilePath}'
-            \$jsonData = Get-Content -Raw -Path \$jsonFile | ConvertFrom-Json
-            \$pattern = '(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)'
-
-            \$versions = @()
-
-            foreach (\$item in \$jsonData.results) {
-                if (\$item.uri -match \$pattern) {
-                    \$major, \$minor, \$patch, \$build = \$matches[1..4] -as [int[]]
-                    \$versions += [PSCustomObject]@{
-                        Major   = \$major
-                        Minor   = \$minor
-                        Patch   = \$patch
-                        Build   = \$build
-                        Uri     = \$item.uri
-                    }
-                }
-            }
-
-            \$latest = \$versions | Sort-Object Major, Minor, Patch, Build -Descending | Select-Object -First 1
-
-            if (\$latest) {
-                Write-Output "\$($latest.Major).\$($latest.Minor).\$($latest.Patch).\$($latest.Build)|\$($latest.Uri)"
-            } else {
-                Write-Output "NoVersion|NoURI"
-            }
-
-            Remove-Item -Force \$jsonFile
-        """, returnStdout: true).trim()
-
-        def parts = result.split("\\|")
-        return [version: parts[0], uri: parts[1]]
-    } finally {
-        // Ensure the file is deleted even if an error occurs
-        deleteFile(jsonFilePath)
-    }
-}
-
-// Helper function to delete a file in Jenkins workspace
-def deleteFile(String filePath) {
-    try {
-        if (fileExists(filePath)) {
-            sh "rm -f ${filePath}"
+    def latest = json.results.collect { item ->
+        def match = (item.uri =~ versionPattern)
+        if (match.find()) {
+            def (major, minor, patch, build) = match[0][1..4]*.toInteger()
+            return [major, minor, patch, build, item.uri]
         }
-    } catch (Exception e) {
-        echo "Warning: Failed to delete ${filePath} - ${e.getMessage()}"
-    }
+        return null
+    }.findAll { it != null }
+    .max { a, b -> [0, 1, 2, 3].findResult { i -> a[i] <=> b[i] ?: null } ?: 0 }
+
+    return latest ? [version: "${latest[0]}.${latest[1]}.${latest[2]}.${latest[3]}", uri: latest[4]] : null
 }
