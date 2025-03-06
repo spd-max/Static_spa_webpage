@@ -26,7 +26,7 @@ pipeline {
     }
 }
 
-// Groovy Method to Extract Latest Version
+// Groovy Method to Extract Latest Version (Fixed)
 def findLatestVersion(String jsonString) {
     def json = new groovy.json.JsonSlurper().parseText(jsonString)
     def versionPattern = ~/(\d+)\.(\d+)\.(\d+)\.(\d+)/
@@ -34,7 +34,10 @@ def findLatestVersion(String jsonString) {
     def latest = json.results.collect { item ->
         def match = (item.uri =~ versionPattern)
         if (match.find()) {
-            def (major, minor, patch, build) = match[0][1..4]*.toInteger()
+            def major = match[0][1].toInteger()
+            def minor = match[0][2].toInteger()
+            def patch = match[0][3].toInteger()
+            def build = match[0][4].toInteger()
             return [major, minor, patch, build, item.uri]
         }
         return null
