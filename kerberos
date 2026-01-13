@@ -1,36 +1,30 @@
-using System.Net;
-using System.Net.Security;
-using System.Security.Principal;
-using System.Text;
-
-public static class KerberosSspi
-{
-    public static byte[] GetApReq(string spn)
-    {
-        var target = new SspiTarget(spn);
-
-        using var context = new SspiContext(
-            CredentialCache.DefaultNetworkCredentials,
-            target,
-            ContextFlags.MutualAuth | ContextFlags.Confidentiality);
-
-        // First leg – ask Windows to generate the Kerberos AP-REQ
-        var token = context.Init(null);
-
-        if (token == null || token.Length == 0)
-            throw new InvalidOperationException("Kerberos token not generated");
-
-        return token; // This is the Kerberos AP-REQ
-    }
-}
-
 private byte[] GenerateServiceTicket()
 {
-    if (string.IsNullOrWhiteSpace(Spn) ||
-        Spn.Equals("localhost", StringComparison.OrdinalIgnoreCase))
+    if (string.IsNullOrEmpty(Spn) || Spn.Equals("localhost", StringComparison.OrdinalIgnoreCase))
     {
         return null;
     }
 
-    return KerberosSspi.GetApReq(Spn);
+    // Note: In .NET 8, AppDomain.SetPrincipalPolicy is often unnecessary 
+    // if the process is already running under the desired Windows Identity.
+
+    try 
+    {
+        // 1. Initialize the provider (requires System.ServiceModel.Security NuGet)
+        var tokenProvider = new System.ServiceModel.Security.Tokens.KerberosSecurityTokenProvider(Spn);
+        
+        // 2. Request the token
+        // Use GetTokenAsync if possible, but for a synchronous library:
+        var securityToken = tokenProvider.GetToken(TimeSpan.FromMinutes(1)) 
+                            as System.ServiceModel.Security.Tokens.KerberosRequestorSecurityToken;
+
+        // 3. Extract the raw ticket bytes
+        return securityToken?.GetRequest();
+    }
+    catch (Exception ex)
+    {
+        // Log error - common issues in .NET 8 involve SPN format 
+        // or missing Kerberos configuration on the client machine.
+        throw; 
+    }
 }
