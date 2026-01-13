@@ -1,0 +1,30 @@
+using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
+using System.Security.Principal;
+
+public static class KerberosSspi
+{
+    public static byte[] GetApReq(string spn)
+    {
+        // Extract hostname from SPN
+        string host = spn.Substring(spn.IndexOf('/') + 1);
+
+        // We just need ANY TCP connection to force SSPI to talk to KDC
+        using var socket = new Socket(SocketType.Stream, ProtocolType.Tcp);
+        socket.Connect(host, 7574); // Coherence proxy port (or any open port)
+
+        using var stream = new NetworkStream(socket, ownsSocket: true);
+        using var negotiate = new NegotiateStream(stream, leaveInnerStreamOpen: true);
+
+        negotiate.AuthenticateAsClient(
+            CredentialCache.DefaultNetworkCredentials,
+            spn,
+            ProtectionLevel.None,
+            TokenImpersonationLevel.Impersonation
+        );
+
+        // This is the Kerberos AP-REQ token that Coherence expects
+        return negotiate.GetOutgoingBlob();
+    }
+}
