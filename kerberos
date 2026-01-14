@@ -1,3 +1,59 @@
+using System.Runtime.InteropServices;
+using System.Security.Principal;
+
+public static class KerberosTicketHelper
+{
+    [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int AcquireCredentialsHandle(string pszPrincipal, string pszPackage, int fCredentialUse,
+        IntPtr pvLogonID, IntPtr pAuthData, IntPtr pGetKeyFn, IntPtr pvGetKeyArgument, ref long phCredential, ref long ptsExpiry);
+
+    [DllImport("secur32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int InitializeSecurityContext(ref long phCredential, IntPtr phContext, string pszTargetName,
+        int fContextReq, int Reserved1, int TargetDataRep, IntPtr pInput, int Reserved2, ref long phNewContext,
+        ref SecBufferDesc pOutput, ref int pfContextAttr, ref long ptsExpiry);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SecBuffer { public int cbBuffer; public int BufferType; public IntPtr pvBuffer; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SecBufferDesc { public int ulVersion; public int cBuffers; public IntPtr pBuffers; }
+
+    public static byte[] GetKerberosTicket(string spn)
+    {
+        long credentialHandle = 0;
+        long expiry = 0;
+        long contextHandle = 0;
+
+        // 1. Acquire handle for the current user
+        AcquireCredentialsHandle(null, "Kerberos", 1, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, IntPtr.Zero, ref credentialHandle, ref expiry);
+
+        // 2. Prepare output buffer
+        var buffer = new SecBuffer { cbBuffer = 16384, BufferType = 2, pvBuffer = Marshal.AllocHGlobal(16384) };
+        var bufferDesc = new SecBufferDesc { ulVersion = 0, cBuffers = 1, pBuffers = Marshal.AllocHGlobal(Marshal.SizeOf(buffer)) };
+        Marshal.StructureToPtr(buffer, bufferDesc.pBuffers, false);
+
+        try
+        {
+            int contextAttr = 0;
+            // 3. Initialize context to get the ticket
+            InitializeSecurityContext(ref credentialHandle, IntPtr.Zero, spn, 0x10, 0, 1211, IntPtr.Zero, 0, ref contextHandle, ref bufferDesc, ref contextAttr, ref expiry);
+
+            // 4. Extract the byte array
+            var outBuffer = Marshal.PtrToStructure<SecBuffer>(bufferDesc.pBuffers);
+            byte[] ticket = new byte[outBuffer.cbBuffer];
+            Marshal.Copy(outBuffer.pvBuffer, ticket, 0, outBuffer.cbBuffer);
+            return ticket;
+        }
+        finally
+        {
+            Marshal.FreeHGlobal(buffer.pvBuffer);
+            Marshal.FreeHGlobal(bufferDesc.pBuffers);
+        }
+    }
+}
+
+
+
 private byte[] GenerateServiceTicket()
 {
     if (string.IsNullOrEmpty(Spn) || Spn.Equals("localhost", StringComparison.OrdinalIgnoreCase))
@@ -5,26 +61,15 @@ private byte[] GenerateServiceTicket()
         return null;
     }
 
-    // Note: In .NET 8, AppDomain.SetPrincipalPolicy is often unnecessary 
-    // if the process is already running under the desired Windows Identity.
-
-    try 
+    try
     {
-        // 1. Initialize the provider (requires System.ServiceModel.Security NuGet)
-        var tokenProvider = new System.ServiceModel.Security.Tokens.KerberosSecurityTokenProvider(Spn);
-        
-        // 2. Request the token
-        // Use GetTokenAsync if possible, but for a synchronous library:
-        var securityToken = tokenProvider.GetToken(TimeSpan.FromMinutes(1)) 
-                            as System.ServiceModel.Security.Tokens.KerberosRequestorSecurityToken;
-
-        // 3. Extract the raw ticket bytes
-        return securityToken?.GetRequest();
+        // Replace the legacy provider with our native helper
+        return KerberosTicketHelper.GetKerberosTicket(this.Spn);
     }
     catch (Exception ex)
     {
-        // Log error - common issues in .NET 8 involve SPN format 
-        // or missing Kerberos configuration on the client machine.
-        throw; 
+        // Log your error here
+        throw new Exception($"Failed to generate Kerberos ticket for {Spn}", ex);
     }
 }
+
